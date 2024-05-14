@@ -15,7 +15,7 @@ def main():
     choice = st.sidebar.selectbox("Menu", menu)
     color = st.sidebar.color_picker("color",value="#9E1FA2")
     if choice == "Home":
-        world = load_data("worldcities.csv")
+        world = load_data("data/worldcities.csv")
         with st.expander("Data View"):
             st.dataframe(world)
         fig = px.scatter_mapbox
@@ -31,7 +31,7 @@ def main():
         st.plotly_chart(fig)
 
     if choice == "Country":
-        world = load_data("worldcities.csv")
+        world = load_data("data/worldcities.csv")
         countries_list = world["country"].unique().tolist()
         
         selected_country = st.sidebar.selectbox("country", countries_list)
@@ -52,7 +52,7 @@ def main():
         st.plotly_chart(fig)
 
     if choice == "City":
-        world = load_data("worldcities.csv")
+        world = load_data("data/worldcities.csv")
         countries_list = world["city"].unique().tolist()
         
         selected_city = st.multiselect("city", countries_list, default="Jamaica")
