@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 import plotly.express as px
+import json
 
 from langchain.agents.agent_types import AgentType
 from langchain_experimental.agents.agent_toolkits import create_pandas_dataframe_agent
@@ -9,7 +10,7 @@ from langchain_openai import ChatOpenAI
 
 from langchain_openai import OpenAI
 
-# openai_api_key = Y_key
+openai_api_key = Y_Key
 # Function to check if the CSV file exists, and create it if it doesn't
 
 st.set_page_config(layout="wide")
@@ -30,13 +31,21 @@ def append_to_csv(country, filename='attendees.csv'):
 
 # Load world cities data
 def load_data(file_path):
-    return pd.read_csv(file_path)
+    try:
+        return pd.read_csv(file_path)
+    except pd.errors.ParserError as e:
+        st.error(f"Error reading {file_path}: {e}")
+        return pd.DataFrame()
 
 # Initialize the CSV file
 initialize_csv()
 
 # Load world cities data
 world = load_data("data/worldcities.csv")
+
+# Check if data is loaded successfully
+if world.empty:
+    st.stop()
 
 # Get unique countries from the world cities data
 countries = world['country'].unique()
@@ -62,6 +71,8 @@ if os.path.isfile('attendees.csv'):
     st.subheader('Current Attendees')
     df = pd.read_csv('attendees.csv')
     st.write(df)
+else:
+    df = pd.DataFrame(columns=['Country', 'Count'])
 
 # Merge with world cities data to get latitude and longitude of countries
 world_filtered = world.merge(df, left_on='country', right_on='Country', how='inner').drop_duplicates('country')
@@ -70,30 +81,34 @@ world_filtered = world.merge(df, left_on='country', right_on='Country', how='inn
 country_coords = world_filtered.groupby('country').agg({'lat': 'mean', 'lng': 'mean', 'Count': 'sum'}).reset_index()
 
 # Plotting the map
-fig = px.scatter_mapbox(country_coords,
-                        lat="lat",
-                        lon="lng",
-                        size="Count",  # Size of the points based on attendee count
-                        hover_name="country",
-                        hover_data=["Count"],
-                        color_discrete_sequence=["blue"],
-                        zoom=1.70,
-                        height=700)
-fig.update_layout(mapbox_style="open-street-map")
-st.plotly_chart(fig, use_container_width=True)
-
+if not country_coords.empty and 'Count' in country_coords:
+    fig = px.scatter_mapbox(country_coords,
+                            lat="lat",
+                            lon="lng",
+                            size="Count",  # Size of the points based on attendee count
+                            hover_name="country",
+                            hover_data=["Count"],
+                            color_discrete_sequence=["blue"],
+                            zoom=1.70,
+                            height=700)
+    fig.update_layout(mapbox_style="open-street-map")
+    st.plotly_chart(fig, use_container_width=True)
+else:
+    st.info("No attendee data available to plot.")
 
 agent = create_pandas_dataframe_agent(
-    ChatOpenAI(api_key=openai_api_key,temperature=0, model="gpt-3.5-turbo-0613"),
+    ChatOpenAI(api_key=openai_api_key, temperature=0, model="gpt-4"),
     df,
     verbose=True,
     agent_type=AgentType.OPENAI_FUNCTIONS,
     handle_parsing_errors=True
 )
 
-user_input_ = st.text_input(label="Please enter your your prompt",value="What is the country with the highest count?")
-
+user_input_ = st.text_input(label="Please enter your prompt", value="What is the country with the highest count?")
 
 if user_input_:
-    response = agent.invoke(user_input_)
-    st.write(response)
+    try:
+        response = agent.invoke(json.dumps({"prompt": user_input_}))
+        st.write(response)
+    except ValueError as e:
+        st.error(f"An error occurred: {e}")
